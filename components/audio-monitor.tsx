@@ -26,7 +26,7 @@ export function AudioMonitor({ isLive, onIncident }: AudioMonitorProps) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
 
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         const audioContext = new AudioContextClass();
         audioContextRef.current = audioContext;
 
