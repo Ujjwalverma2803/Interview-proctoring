@@ -21,70 +21,74 @@ export function AudioMonitor({ isLive, onIncident }: AudioMonitorProps) {
   const COOLDOWN_MS = 5000;
 
   useEffect(() => {
+    const startMonitoring = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const audioContext = new AudioContextClass();
+        audioContextRef.current = audioContext;
+
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const checkVolume = () => {
+          if (!analyserRef.current) return;
+          analyserRef.current.getByteFrequencyData(dataArray);
+
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / bufferLength / 255;
+          setVolume(average);
+
+          if (average > ALERT_THRESHOLD && Date.now() - lastAlertAtRef.current > COOLDOWN_MS) {
+            lastAlertAtRef.current = Date.now();
+            onIncident(`High audio level detected (${(average * 100).toFixed(0)}% volume).`);
+          }
+
+          animationFrameRef.current = requestAnimationFrame(checkVolume);
+        };
+
+        checkVolume();
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        setIsMuted(true);
+      }
+    };
+
+    const stopMonitoring = () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (audioContextRef.current) {
+        void audioContextRef.current.close();
+      }
+      setVolume(0);
+    };
+
     if (!isLive) {
       stopMonitoring();
       return;
     }
 
-    startMonitoring();
+    void startMonitoring();
 
     return () => {
       stopMonitoring();
     };
-  }, [isLive]);
-
-  const startMonitoring = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContextClass();
-      audioContextRef.current = audioContext;
-
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      const checkVolume = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / bufferLength / 255;
-        setVolume(average);
-
-        if (average > ALERT_THRESHOLD && Date.now() - lastAlertAtRef.current > COOLDOWN_MS) {
-          lastAlertAtRef.current = Date.now();
-          onIncident(`High audio level detected (${(average * 100).toFixed(0)}% volume).`);
-        }
-
-        animationFrameRef.current = requestAnimationFrame(checkVolume);
-      };
-
-      checkVolume();
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-      setIsMuted(true);
-    }
-  };
-
-  const stopMonitoring = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    audioContextRef.current?.close();
-    setVolume(0);
-  };
+  }, [isLive, onIncident]);
 
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-300 backdrop-blur-md">

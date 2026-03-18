@@ -82,6 +82,13 @@ type CandidateProfile = {
   experience: string;
 };
 
+type PastSession = {
+  candidate_name: string;
+  target_role: string;
+  incident_count: number;
+  last_seen: string;
+};
+
 const DETECTION_RULES = {
   suspiciousObjects: new Set(["cell phone", "laptop", "book", "tv", "remote", "tablet", "monitor"]),
   objectCooldownMs: 6000,
@@ -687,20 +694,20 @@ export function ProctoringStudio() {
     },
   ];
 
-  const [pastSessions, setPastSessions] = useState<any[]>([]);
+  const [pastSessions, setPastSessions] = useState<PastSession[]>([]);
 
   useEffect(() => {
     const fetchSessions = async () => {
       try {
         const backendUrl = "/api" ;
         const res = await fetch(`${backendUrl}/sessions`);
-        const data = await res.json();
+        const data = (await res.json()) as PastSession[];
         setPastSessions(data);
       } catch (err) {
         console.error("Failed to fetch sessions", err);
       }
     };
-    fetchSessions();
+    void fetchSessions();
   }, [status]);
 
   return (
